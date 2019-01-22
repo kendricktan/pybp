@@ -1,1 +1,1 @@
-pybitcointools==1.1.15
+coincurve==11.0.0

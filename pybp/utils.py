@@ -1,8 +1,9 @@
 import hashlib
 import pybitcointools as B
+import coincurve as C
 
 from typing import Tuple
-from pybp.types import Vector
+from pybp.types import Vector, Scalar, Point
 
 
 def egcd(a: int, b: int) -> Tuple[int, int, int]:
@@ -51,7 +52,7 @@ def halves(v: Vector) -> Vector:
     return (v[:h], v[h:])
 
 
-def getNUMS(index=0) -> bytes:
+def getNUMS(index=0) -> Point:
     """
     Nothing Up My Sleeve
 
@@ -66,8 +67,6 @@ def getNUMS(index=0) -> bytes:
     it's fine to just store a list of all the correct values for
     each index, but for transparency left in code for initialization
     by any user.
-
-    The NUMS generator generated is returned as a secp256k1.PublicKey.
     """
     assert 0 <= index < 256
 
@@ -82,7 +81,10 @@ def getNUMS(index=0) -> bytes:
             # choose the former
             claimed_point: bytes = b'\x02' + hash_seed
 
-            if B.is_pubkey(claimed_point):
-                return claimed_point
+            try:
+                C.PublicKey(claimed_point)
+                return B.encode_pubkey(claimed_point, 'decimal')
+            except:
+                pass
 
     raise Exception('NUMS generation inconceivable')

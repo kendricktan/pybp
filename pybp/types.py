@@ -1,9 +1,9 @@
-from typing import List
+from typing import List, Tuple
 
 Vector = List[int]
 
-Hex = str
-HexCompressed = str
+Point = Tuple[int, int]
+Scalar = int
 
-Bin = bytes
-BinCompressed = bytes
+PrivateKey = Scalar
+PublicKey = Point
