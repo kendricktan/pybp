@@ -1,16 +1,21 @@
-import Crypto.Util.number as N
+import random
+
+# Prime number
+p = 260978677425009836700364089744760003717
+
+# Generator
+g = random.randint(1, p - 1)
 
 
 class Verifier:
-    def __init__(self):
-        # Prime number
-        self.p = N.getPrime(128)
+    def __init__(self, p, g):
+        self.p = p
 
         # Generator
-        self.g = N.getRandomRange(1, self.p - 1)
+        self.g = g
 
         # Secret number
-        self.s = N.getRandomRange(1, self.p - 1)
+        self.s = random.randint(1, p - 1)
 
         # Hiding Generator - order of q and subgroup of Z_p
         self.h = pow(self.g, self.s, self.p)
@@ -53,7 +58,7 @@ class Prover:
 
         where h = (g^s) mod p
         """
-        r = N.getRandomRange(1, self.p - 1)
+        r = random.randint(1, self.p - 1)
 
         # Commit message
         c = (pow(self.g, value, self.p) * pow(self.h, r, self.p)) % self.p
@@ -66,8 +71,8 @@ value1 = 50
 value2 = 42
 
 # Verifier and prover
-verifier = Verifier()
-prover = Prover(verifier.p, verifier.g, verifier.h)
+verifier = Verifier(p, g)
+prover = Prover(p, g, verifier.h)
 
 # Commit message
 c1, r1 = prover.commit(value1)

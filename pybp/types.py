@@ -1,9 +1,9 @@
 from typing import List
 
+Vector = List[int]
 
-class Vector:
-    def __init__(self, n: List[int]):
-        self.n = n
+Hex = str
+HexCompressed = str
 
-    def __len__(self):
-        return len(self.n)
+Bin = bytes
+BinCompressed = bytes
