@@ -3,7 +3,7 @@ import hashlib
 import pybitcointools as B
 import coincurve as C
 
-from typing import Tuple
+from typing import Tuple, List
 from pybp.types import Scalar, Point
 from pybp.vectors import Vector
 
@@ -72,6 +72,16 @@ def getNUMS(index=0) -> Point:
                 continue
 
     raise Exception('NUMS generation inconceivable')
+
+
+def split(a: List[any]) -> Tuple[List[any], List[any]]:
+    try:
+        a[:]
+    except:
+        raise Exception('Param supplied for `split` needs to be subscriptable')
+    assert len(a) % 2 == 0
+    mid = int(len(a) / 2)
+    return (a[:mid], a[mid:])
 
 
 def get_blinding_value() -> Scalar:

@@ -1,7 +1,7 @@
 import pybitcointools as B
 
 from pybp.types import Scalar
-from typing import List
+from typing import List, Tuple
 
 
 class Vector:
@@ -13,7 +13,7 @@ class Vector:
                  v: List[int],
                  size: int = B.N):
         assert isinstance(v, List)
-        assert len(v) in [2, 4, 8, 16, 32, 64]
+        assert len(v) in [1, 2, 4, 8, 16, 32, 64]
         for i in v:
             assert isinstance(i, int)
 
@@ -60,13 +60,21 @@ class Vector:
 
         return True
 
+    def __getitem__(self, key):
+        ret = self.vals[key]
+
+        if not isinstance(ret, List):
+            return ret
+
+        return Vector(ret)
+
     def __len__(self):
         return len(self.vals)
 
     def __iter__(self):
         self.n = 0
         return self
-    
+
     def __next__(self):
         if self.n < len(self.vals):
             ret = self.vals[self.n]

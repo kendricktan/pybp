@@ -4,9 +4,9 @@ import hashlib
 import pybitcointools as B
 
 from functools import reduce
-from typing import List
+from typing import List, Union
 
-from pybp.utils import get_blinding_value, get_blinding_vector, getNUMS
+from pybp.utils import get_blinding_value, get_blinding_vector, getNUMS, modinv
 from pybp.pederson import PedersonCommitment
 from pybp.types import Scalar, Point
 from pybp.vectors import Vector, to_bitvector, to_powervector
@@ -23,15 +23,25 @@ class RangeProof:
                              64], "Bitlength must be power of 2 <= 64"
         self.bitlength = bitlength
 
-    def fiat_shamir(self, data: List[Point], nret=2) -> List[Scalar]:
+    def fiat_shamir(self, data: Union[List[Point], List[Scalar]], nret=2) -> List[Scalar]:
         """
         Generates nret integer chllange values from the currnet
         interaction (data) and the previous challenge values (self.fs_state),
         thus fulfilling the requirement of basing the challenge on the transcript of the
         prover-verifier communication up to this point
         """
-        data_bs: bytes = reduce(lambda acc, x: acc +
-                                B.encode_pubkey(x, 'bin_compressed'), data, b"")
+        # Point type
+        if isinstance(data[0], tuple):
+            data_bs: bytes = reduce(lambda acc, x: acc +
+                                    B.encode_pubkey(x, 'bin'), data, b"")
+
+        # Scalar type
+        elif isinstance(data[0], int):
+            data_bs: bytes = reduce(lambda acc, x: acc +
+                                    B.encode_privkey(x, 'bin'), data, b"")
+        
+        else:
+            raise Exception('Invalid `data` param type for fiat_shamir')
         xb: bytes = hashlib.sha256(self.fs_state + data_bs).digest()
 
         challenges: List[Scalar] = []
@@ -54,6 +64,7 @@ class RangeProof:
         # Mainly for readability
         zeros = Vector([0] * self.bitlength)
         ones = Vector([1] * self.bitlength)
+        twos = Vector([2] * self.bitlength)
         power_of_twos = to_powervector(2, self.bitlength)
 
         aL = to_bitvector(value, self.bitlength)
@@ -72,17 +83,13 @@ class RangeProof:
         alpha: Scalar = get_blinding_value()
         rho = get_blinding_value()
 
-        A = InnerProductCommitment(aL, aR)
-        A.U = getNUMS(255)
-        A.c = alpha
+        A = InnerProductCommitment(aL, aR, c=alpha, U=getNUMS(255))
         P_a: Point = A.get_commitment()
 
         sL = get_blinding_vector(self.bitlength)
         sR = get_blinding_vector(self.bitlength)
 
-        S = InnerProductCommitment(sL, sR)
-        S.U = getNUMS(255)
-        S.c = rho
+        S = InnerProductCommitment(sL, sR, c=rho, U=getNUMS(255))
         P_s: Point = S.get_commitment()
 
         fs_challanges = self.fiat_shamir([V, P_a, P_s])
@@ -129,3 +136,27 @@ class RangeProof:
         t = (t0 + t1 * x_1 + t2 * x_1 * x_1) % B.N
 
         assert t == lx @ rx
+
+        # Prover can new send tau_x, mu and t to verifier
+        # inner product argument can be verified from this data
+        hprime = []
+        yinv = modinv(y, B.N)
+
+        for i in range(self.bitlength):
+            hprime.append(
+                B.multiply(A.H[i], pow(yinv, i, B.N))
+            )
+
+        uchallenge = self.fiat_shamir([tau_x, mu, t], nret=1)[0]
+        U = B.multiply(B.encode_pubkey(B.G, 'decimal'), uchallenge)
+
+        # On the prover side, need to construct an inner product argument
+        iproof = InnerProductCommitment(lx, rx, U=U, H=hprime)
+        proof = iproof.generate_proof()
+
+        # At this point we have a valid data set, but here is included a
+        # sanity check that the inner product proof we've generated actually verifies
+        iproof2 = InnerProductCommitment(ones, twos, H=hprime, U=U)
+        ak, bk, lk, rk = proof
+
+        assert iproof2.verify_proof(ak, bk, iproof.get_commitment(), lk, rk)
