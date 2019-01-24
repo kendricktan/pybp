@@ -1,9 +1,11 @@
+import os
 import hashlib
 import pybitcointools as B
 import coincurve as C
 
 from typing import Tuple
-from pybp.types import Vector, Scalar, Point
+from pybp.types import Scalar, Point
+from pybp.vectors import Vector
 
 
 def egcd(a: int, b: int) -> Tuple[int, int, int]:
@@ -33,25 +35,6 @@ def modinv(a: int, m: int) -> int:
     return x % m
 
 
-def inner_product(a: Vector, b: Vector) -> int:
-    ret = 0
-
-    if len(a) is not len(b):
-        raise Exception(
-            'inner_product between two vectors must be of same length')
-
-    for i in range((len(a))):
-        ret = ret + (a.n[i] * b.n[i])
-
-    return ret
-
-
-def halves(v: Vector) -> Vector:
-    assert len(v) % 2 == 0
-    h = int(len(v) / 2)
-    return (v[:h], v[h:])
-
-
 def getNUMS(index=0) -> Point:
     """
     Nothing Up My Sleeve
@@ -68,23 +51,32 @@ def getNUMS(index=0) -> Point:
     each index, but for transparency left in code for initialization
     by any user.
     """
-    assert 0 <= index < 256
+    assert index in range(256)
 
     for G in [B.encode_pubkey(B.G, 'bin_compressed'), B.encode_pubkey(B.G, 'bin')]:
-        seed = G + chr(index).encode('utf-8')
+        # Using latin-1 since its used in BTC
+        seed = G + chr(index).encode('latin-1')
         for counter in range(256):
-            seed_c = seed + chr(counter).encode('utf-8')
+            seed_c = seed + chr(counter).encode('latin-1')
             hash_seed = hashlib.sha256(seed_c).digest()
 
             # Every x-coord on the curve has two y-values, encoded
             # in compressed form with 02/03 parity byte. We just
             # choose the former
-            claimed_point: bytes = b'\x02' + hash_seed
+            claimed_point: bytes = chr(2).encode('latin-1') + hash_seed
 
             try:
                 C.PublicKey(claimed_point)
                 return B.encode_pubkey(claimed_point, 'decimal')
             except:
-                pass
+                continue
 
     raise Exception('NUMS generation inconceivable')
+
+
+def get_blinding_value() -> Scalar:
+    return B.encode_privkey(os.urandom(32), 'decimal')
+
+
+def get_blinding_vector(length) -> Vector:
+    return Vector([get_blinding_value() for i in range(length)])

@@ -1,6 +1,7 @@
-from typing import List, Tuple
+import pybitcointools as B
 
-Vector = List[int]
+from typing import Tuple
+
 
 Point = Tuple[int, int]
 Scalar = int

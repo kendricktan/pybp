@@ -3,6 +3,7 @@ import pybp
 
 import pybitcointools as B
 
+from pybp.utils import get_blinding_value
 from pybp.types import Scalar, Point
 
 class PedersonCommitment:
@@ -14,15 +15,10 @@ class PedersonCommitment:
         self.v: Scalar = v
 
         # Blinding Factor
-        self.b: Scalar = B.encode_privkey(os.urandom(32), 'decimal')
+        self.b: Scalar = get_blinding_value()
 
     def get_commitment(self) -> Point:
         Hb = B.multiply(self.h, self.b)
-        Gv = B.multiply(self.g, self.v)
+        Gv = B.multiply(self.g, self.v)        
 
         return B.add(Hb, Gv)
-
-
-class VectorPedersonCommitment:
-    def __init__(self):
-        pass
