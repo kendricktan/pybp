@@ -39,7 +39,7 @@ class InnerProductCommitment:
 
         self.a = a
         self.b = b
-        self.c: Scalar = a @ b
+        self.c: Scalar = c if c is not None else a @ b
 
         self.vlen = len(a)
 
@@ -59,7 +59,7 @@ class InnerProductCommitment:
         c * U + v_1 * G_1 + v_2 * G_2 + ... + v_n * G_n +
         w_1 * H_1 + w_2 * H_2 + ... + w_n + H_n
         """
-        P = B.fast_multiply(self.U, self.c)
+        P = B.multiply(self.U, self.c)
 
         for g_x, a_x in zip(self.G, self.a):
             P = B.add_pubkeys(P, B.fast_multiply(g_x, a_x))

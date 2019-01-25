@@ -283,8 +283,8 @@ class RangeProof:
         a, b, L, R = proof
 
         iproof = InnerProductCommitment(
-            Vector([1] * self.bitlength),
-            Vector([2] * self.bitlength),
+            power_of_ones,
+            power_of_twos,
             H=hprime,
             U=U
         )

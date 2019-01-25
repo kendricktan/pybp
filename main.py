@@ -13,10 +13,9 @@ from pybp.vectors import Vector, to_bitvector, to_powervector
 from pybp.innerproduct import InnerProductCommitment
 from pybp.rangeproof import RangeProof
 
-value = 3
-rangebits = 4
+value = -1
+rangebits = 32
 
-assert 0 < value < 2**rangebits
 
 # now simulating: the serialized proof passed to the validator/receiver;
 # note that it is tacitly assumed that in the expected application (CT
@@ -60,7 +59,7 @@ if fail:
     Varg = PedersonCommitment(value, b=rp.gamma).get_commitment()
 else:
     Varg = rp.V
-if not rp.verify(
+if not rp2.verify(
         proof['Ap'],
         proof['Sp'],
         proof['T1p'],
