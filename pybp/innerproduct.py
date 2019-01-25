@@ -71,7 +71,7 @@ class InnerProductCommitment:
 
     def fiat_shamir(self, L: Point, R: Point, P: Point) -> Tuple[Scalar, Scalar, Scalar, Scalar]:
         """
-        Generates a challenge value x from the 'transcrip' up to this point
+        Generates a challenge value x from the 'transcript' up to this point
         using the previous hash, and uses the L and R values from the current
         iteration, and commitment P. Returned is the value of the challenge
         and its modular inverse, as well as the squares of those values, both
@@ -83,14 +83,14 @@ class InnerProductCommitment:
 
         self.fs_state = xb
 
-        x: Scalar = B.decode_privkey(xb, 'bin') % B.N
+        x: Scalar = B.encode_privkey(xb, 'decimal') % B.N
         x_sq: Scalar = pow(x, 2, B.N)
         xinv: Scalar = modinv(x, B.N)
         x_sq_inv: Scalar = pow(xinv, 2, B.N)
 
         return (x, x_sq, xinv, x_sq_inv)
 
-    def generate_proof(self):
+    def generate_proof(self) -> Tuple[Scalar, Scalar, List[Point], List[Point]]:
         self.fs_state = b''
         self.L = []
         self.R = []
@@ -156,7 +156,7 @@ class InnerProductCommitment:
             )
 
             bprime.append(
-                xinv * b[i] + x * b[i + int(N / 2)] % B.N
+                (xinv * b[i]) + x * b[i + int(N / 2)] % B.N
             )
 
         p_prime1 = B.add_pubkeys(P, B.multiply(self.L[-1], x_sq))
