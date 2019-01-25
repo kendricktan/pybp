@@ -229,7 +229,8 @@ class RangeProof:
         rhs = B.add_pubkeys(rhs, B.multiply(T2p, pow(x_1, 2, B.N)))
 
         if not lhs == rhs:
-            raise Exception('(61) verification check failed')
+            print('(61) verification check failed')
+            return False
 
         # HPrime
         hprime = []

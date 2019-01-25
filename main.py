@@ -68,7 +68,7 @@ if not rp2.verify(
         proof['mu'],
         proof['t'],
         proof['proof'],
-        rp.V
+        Varg
     ):
     if not fail:
         print('Rangeproof should have verified but is invalid; bug.')
