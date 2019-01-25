@@ -1,6 +1,6 @@
 import os
 import hashlib
-
+import binascii
 import pybitcointools as B
 
 from functools import reduce
@@ -24,17 +24,17 @@ def rp_fiat_shamir(fs_state, data: Union[List[Point], List[Scalar]], nret=2) -> 
     """
     # Point type
     if isinstance(data[0], tuple):
-        data_bs: bytes = reduce(lambda acc, x: acc +
-                                B.encode_pubkey(x, 'bin'), data, b"")
+        data_bs = reduce(lambda acc, x: acc +
+                                B.encode_pubkey(x, 'hex_compressed'), data, "")
 
     # Scalar type
     elif isinstance(data[0], int):
-        data_bs: bytes = reduce(lambda acc, x: acc +
-                                B.encode_privkey(x, 'bin'), data, b"")
-
+        data_bs = reduce(lambda acc, x: acc +
+                                B.encode_privkey(x, 'hex_compressed'), data, "")    
     else:
         raise Exception('Invalid `data` param type for fiat_shamir')
-    xb: bytes = hashlib.sha256(fs_state + data_bs).digest()
+
+    xb: bytes = hashlib.sha256(fs_state + binascii.unhexlify(data_bs)).digest()
 
     challenges: List[Scalar] = []
 
@@ -54,7 +54,7 @@ def ipc_fiat_shamir(fs_state, L: Point, R: Point, P: Point) -> Tuple[Scalar, Sca
     integers and binary strings, for convenience
     """
     data_bs: bytes = reduce(lambda acc, x: acc +
-                            B.encode_pubkey(x, 'bin'), [L, R, P], b"")
+                            B.encode_pubkey(x, 'hex_compressed'), [L, R, P], b"")    
     xb: bytes = hashlib.sha256(fs_state + data_bs).digest()
 
     x: Scalar = B.encode_privkey(xb, 'decimal') % B.N
@@ -104,11 +104,14 @@ def generate_proof():
     A = InnerProductCommitment(aL, aR, c=alpha, U=getNUMS(255))
     P_a = A.get_commitment()
 
-    print(A.b)
-    print(B.encode_pubkey(P_a, 'hex_compressed'))
+    S = InnerProductCommitment(sL, sR, c=rho, U=getNUMS(255))
+    P_s = S.get_commitment()
+
+    # print(B.encode_pubkey(P_s, 'hex_compressed'))
+    fsstate, (y, z) = rp_fiat_shamir(fsstate, [V, P_a, P_s])
 
 
-
+    print(y, z)
 
 if __name__ == '__main__':
     generate_proof()

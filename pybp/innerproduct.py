@@ -1,5 +1,5 @@
 import hashlib
-
+import binascii
 import pybitcointools as B
 
 from functools import reduce
@@ -78,8 +78,8 @@ class InnerProductCommitment:
         integers and binary strings, for convenience
         """
         data_bs: bytes = reduce(lambda acc, x: acc +
-                                B.encode_pubkey(x, 'bin'), [L, R, P], b"")
-        xb: bytes = hashlib.sha256(self.fs_state + data_bs).digest()
+                                B.encode_pubkey(x, 'hex_compressed'), [L, R, P], "")
+        xb: bytes = hashlib.sha256(self.fs_state + binascii.unhexlify(data_bs)).digest()
 
         self.fs_state = xb
 
