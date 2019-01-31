@@ -3,7 +3,8 @@ import hashlib
 import pybitcointools as B
 import coincurve as C
 
-from typing import Tuple, List
+from functools import reduce
+from typing import Tuple, List, Union
 from pybp.types import Scalar, Point
 from pybp.vectors import Vector
 
@@ -51,21 +52,21 @@ def getNUMS(index=0) -> Point:
     each index, but for transparency left in code for initialization
     by any user.
     """
-    assert index in range(256)
 
     for G in [B.encode_pubkey(B.G, 'bin_compressed'), B.encode_pubkey(B.G, 'bin')]:
         # Using latin-1 since its used in BTC
-        seed = G + chr(index).encode('latin-1')
+        seed = G + chr(index).encode('utf-8')
         for counter in range(256):
-            seed_c = seed + chr(counter).encode('latin-1')
+            seed_c = seed + chr(counter).encode('utf-8')
             hash_seed = hashlib.sha256(seed_c).digest()
 
             # Every x-coord on the curve has two y-values, encoded
             # in compressed form with 02/03 parity byte. We just
             # choose the former
-            claimed_point: bytes = chr(2).encode('latin-1') + hash_seed
+            claimed_point: bytes = chr(2).encode('utf-8') + hash_seed
 
             try:
+                # Check to see if its a valid public key
                 C.PublicKey(claimed_point)
                 return B.encode_pubkey(claimed_point, 'decimal')
             except:
@@ -90,3 +91,36 @@ def get_blinding_value() -> Scalar:
 
 def get_blinding_vector(length) -> Vector:
     return Vector([get_blinding_value() for i in range(length)])
+
+
+def fiat_shamir(fs_state: bytes,
+                data: Union[List[Point], List[Scalar]],
+                nret=2) -> Tuple[bytes, List[Scalar]]:
+    """
+    Generates nret integer chllange values from the currnet
+    interaction (data) and the previous challenge values (self.fs_state),
+    thus fulfilling the requirement of basing the challenge on the transcript of the
+    prover-verifier communication up to this point
+    """
+    # Point type
+    if isinstance(data[0], tuple):
+        data_bs: bytes = reduce(lambda acc, x: acc +
+                                B.encode_pubkey(x, 'bin'), data, b"")
+
+    # Scalar type
+    elif isinstance(data[0], int):
+        data_bs: bytes = reduce(lambda acc, x: acc +
+                                B.encode_privkey(x, 'bin'), data, b"")
+
+    else:
+        raise Exception('Invalid `data` param type for fiat_shamir')
+
+    xb: bytes = hashlib.sha256(fs_state + data_bs).digest()
+
+    challenges: List[Scalar] = []
+
+    for _ in range(nret):
+        challenges.append(B.encode_privkey(xb, 'decimal'))
+        xb = hashlib.sha256(xb).digest()
+
+    return fs_state, challenges

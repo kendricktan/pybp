@@ -6,7 +6,7 @@ import pybitcointools as B
 from functools import reduce
 from typing import List, Union, Dict
 
-from pybp.utils import get_blinding_value, get_blinding_vector, getNUMS, modinv
+from pybp.utils import get_blinding_value, get_blinding_vector, getNUMS, modinv, fiat_shamir
 from pybp.pederson import PedersonCommitment
 from pybp.types import Scalar, Point
 from pybp.vectors import Vector, to_bitvector, to_powervector
@@ -23,42 +23,12 @@ class RangeProof:
                              64], "Bitlength must be power of 2 <= 64"
         self.bitlength = bitlength
 
-    def fiat_shamir(self, data: Union[List[Point], List[Scalar]], nret=2) -> List[Scalar]:
-        """
-        Generates nret integer chllange values from the currnet
-        interaction (data) and the previous challenge values (self.fs_state),
-        thus fulfilling the requirement of basing the challenge on the transcript of the
-        prover-verifier communication up to this point
-        """
-        # Point type
-        if isinstance(data[0], tuple):
-            data_bs: bytes = reduce(lambda acc, x: acc +
-                                    B.encode_pubkey(x, 'bin'), data, b"")
-
-        # Scalar type
-        elif isinstance(data[0], int):
-            data_bs: bytes = reduce(lambda acc, x: acc +
-                                    B.encode_privkey(x, 'bin'), data, b"")
-
-        else:
-            raise Exception('Invalid `data` param type for fiat_shamir')
-        xb: bytes = hashlib.sha256(self.fs_state + data_bs).digest()
-
-        challenges: List[Scalar] = []
-
-        for i in range(nret):
-            challenges.append(B.encode_privkey(xb, 'decimal'))
-            xb = hashlib.sha256(xb).digest()
-
-        self.fs_state = xb
-        return challenges
-
     def generate_proof(self, value: Scalar):
         """
         Given a value, follow the algorithm laid out
         on p.16, 17 (section 4.2) of paper for prover side
         """
-        self.fs_state = b''
+        fs_state = b''
 
         # Vector of all 1's or 0's
         # Mainly for readability
@@ -80,32 +50,34 @@ class RangeProof:
         V: Point = pc.get_commitment()
 
         alpha: Scalar = get_blinding_value()
-        rho = get_blinding_value()
-
         A = InnerProductCommitment(aL, aR, c=alpha, U=getNUMS(255))
         P_a: Point = A.get_commitment()
 
         sL = get_blinding_vector(self.bitlength)
         sR = get_blinding_vector(self.bitlength)
+        rho = get_blinding_value()
 
         S = InnerProductCommitment(sL, sR, c=rho, U=getNUMS(255))
         P_s: Point = S.get_commitment()
 
-        fs_challanges = self.fiat_shamir([V, P_a, P_s])
+        fs_state, fs_challanges = fiat_shamir(fs_state, [V, P_a, P_s])
         y: Point = fs_challanges[0]
         z: Point = fs_challanges[1]
 
-        z2 = (z * z) % B.N
+        z2 = pow(z, 2, B.N)
         zv = Vector([z] * self.bitlength)
 
         # Construct l(x) and r(x) coefficients;
         # l[0] = constant term
         # l[1] = linear term
         # same for r(x)
-        l: List[Vector] = [aL - zv, sL]
+        l: List[Vector] = [
+            aL - zv,
+            sL
+        ]
         yn: Vector = to_powervector(y, self.bitlength)
 
-        # 0th coeff is y^n ⋅ (aR + z . 1^n) + z^2 . 2^n
+        # 0th coeff is y^n ⋅ (aR + z ⋅ 1^n) + (z^2 ⋅ 2^n)
         # operators have been overloaded, so all good
         r: List[Vector] = [
             # operator overloading works if vector is first
@@ -115,26 +87,28 @@ class RangeProof:
 
         # Constant term of t(x) = <l(x), r(x)> is the inner product
         # of the constant terms of l(x)and r(x)
-        t0 = l[0] @ r[0]
-        t1 = ((l[0] @ r[1]) + (l[1] @ r[0])) % B.N
-        t2 = l[1] @ r[1]
+        t0: Scalar = l[0] @ r[0]
+        t2: Scalar = l[1] @ r[1]
+        t1: Scalar = (((l[0] + l[1]) @ (r[0] + r[1])) - t0 - t2) % B.N
 
-        T1 = PedersonCommitment(t1)
-        tau1 = T1.b  # T1.b is the blinding factor
+        tau1 = get_blinding_value()
+        T1 = PedersonCommitment(t1, b=tau1)
 
-        T2 = PedersonCommitment(t2)
-        tau2 = T2.b
+        tau2 = get_blinding_value()
+        T2 = PedersonCommitment(t2, b=tau2)
 
-        x_1: Scalar = self.fiat_shamir(
-            [T1.get_commitment(), T2.get_commitment()], nret=1)[0]
+        fs_state, fs_challanges = fiat_shamir(
+            fs_state, [T1.get_commitment(), T2.get_commitment()], nret=1
+        )
+        x_1: Scalar = fs_challanges[0]
         mu = (alpha + rho * x_1) % B.N
-        tau_x = (tau1 * x_1 + tau2 * x_1 * x_1 + z2 * gamma) % B.N
+        tau_x = (z2 * gamma + tau1 * x_1 + tau2 * x_1 * x_1) % B.N
 
         # lx and rx are vetor-value first degree polynomials evaluated at
         # the challenge value x_1
-        lx = l[0] + (l[1] * x_1)
-        rx = r[0] + (r[1] * x_1)
-        t = (t0 + t1 * x_1 + t2 * x_1 * x_1) % B.N
+        lx: Vector = l[0] + (l[1] * x_1)
+        rx: Vector = r[0] + (r[1] * x_1)
+        t: Scalar = (t0 + t1 * x_1 + t2 * x_1 * x_1) % B.N
 
         assert t == lx @ rx
 
@@ -148,7 +122,9 @@ class RangeProof:
                 B.multiply(A.H[i], pow(yinv, i, B.N))
             )
 
-        uchallenge = self.fiat_shamir([tau_x, mu, t], nret=1)[0]
+        fs_state, fs_challanges = fiat_shamir(fs_state, [tau_x, mu, t], nret=1)
+        uchallenge = fs_challanges[0]
+        
         U = B.multiply(B.G, uchallenge)
 
         # On the prover side, need to construct an inner product argument
@@ -163,9 +139,9 @@ class RangeProof:
         # At this point we have a valid data set, but here is included a
         # sanity check that the inner product proof we've generated actually verifies
         iproof2 = InnerProductCommitment(ones, twos, H=hprime, U=U)
-        
+
         assert iproof2.verify_proof(ak, bk, iproof.get_commitment(), lk, rk)
-        
+
         self.proof = proof
         self.tau_x = tau_x
         self.gamma = gamma
@@ -176,7 +152,6 @@ class RangeProof:
         self.S = S
         self.t = t
         self.V = V
-        
 
     def get_proof_dict(self) -> Dict:
         """
@@ -201,15 +176,16 @@ class RangeProof:
         }
 
     def verify(self, Ap, Sp, T1p, T2p, tau_x, mu, t, proof, V):
-        self.fs_state = b''
+        fs_state = b''
 
         # Compute challenges to find x, y, z
-        fs_challenge = self.fiat_shamir([V, Ap, Sp])
+        fs_state, fs_challenge = fiat_shamir(fs_state, [V, Ap, Sp])
         y: Scalar = fs_challenge[0]
         z: Scalar = fs_challenge[1]
         z2 = pow(z, 2, B.N)
 
-        x_1 = self.fiat_shamir([T1p, T2p], nret=1)[0]
+        fs_state, fs_challenge = fiat_shamir(fs_state, [T1p, T2p], nret=1)
+        x_1 = fs_challenge[0]
 
         # Construct verification equation (61)
         power_of_ones = to_powervector(1, self.bitlength)
@@ -263,7 +239,9 @@ class RangeProof:
                 P
             )
 
-        uchallenge = self.fiat_shamir([tau_x, mu, t], nret=1)[0]
+        fs_state, fs_challenge = fiat_shamir(
+            fs_state, [tau_x, mu, t], nret=1)
+        uchallenge: Scalar = fs_challenge[0]
         U = B.multiply(B.G, uchallenge)
         P = B.add_pubkeys(
             B.multiply(U, t),
