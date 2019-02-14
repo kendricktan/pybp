@@ -159,8 +159,8 @@ class InnerProductCommitment:
                 (xinv * b[i]) + x * b[i + int(N / 2)] % B.N
             )
 
-        p_prime1 = B.add_pubkeys(P, B.multiply(self.L[-1], x_sq))
-        p_prime = B.add(p_prime1, B.multiply(self.R[-1], x_sq_inv))
+        p_prime = B.add_pubkeys(P, B.multiply(self.L[-1], x_sq))
+        p_prime = B.add(p_prime, B.multiply(self.R[-1], x_sq_inv))
 
         return self.get_proof_recursive(
             Vector(aprime),

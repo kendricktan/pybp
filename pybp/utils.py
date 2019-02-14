@@ -23,7 +23,7 @@ def egcd(a: int, b: int) -> Tuple[int, int, int]:
     return b, x0, y0
 
 
-def modinv(a: int, m: int) -> int:
+def modinv(a: int, m: int = B.N) -> int:
     """
     Modular Inverse
 
