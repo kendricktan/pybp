@@ -123,4 +123,19 @@ def fiat_shamir(fs_state: bytes,
         challenges.append(B.encode_privkey(xb, 'decimal'))
         xb = hashlib.sha256(xb).digest()
 
-    return fs_state, challenges
+    return xb, challenges
+
+
+def bytes_to_xes(b: bytes) -> Tuple[Scalar, Scalar, Scalar, Scalar]:
+    """
+    Convinient function
+
+    Converts bytes to a scalar (x), and calculates 
+    x, x^2, inv(x), and inv(x^2)
+    """
+    x: Scalar = B.encode_privkey(b, 'decimal') % B.N
+    x_sq: Scalar = pow(x, 2, B.N)
+    xinv: Scalar = modinv(x, B.N)
+    xinv_sq: Scalar = pow(xinv, 2, B.N)
+
+    return (x, x_sq, xinv, xinv_sq)

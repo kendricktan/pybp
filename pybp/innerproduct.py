@@ -7,7 +7,7 @@ from typing import List, Tuple, Union
 
 from pybp.types import Point, Scalar
 from pybp.vectors import Vector
-from pybp.utils import getNUMS, split, modinv
+from pybp.utils import getNUMS, split, modinv, fiat_shamir, bytes_to_xes
 
 
 class InnerProductCommitment:
@@ -69,27 +69,6 @@ class InnerProductCommitment:
 
         return P
 
-    def fiat_shamir(self, L: Point, R: Point, P: Point) -> Tuple[Scalar, Scalar, Scalar, Scalar]:
-        """
-        Generates a challenge value x from the 'transcript' up to this point
-        using the previous hash, and uses the L and R values from the current
-        iteration, and commitment P. Returned is the value of the challenge
-        and its modular inverse, as well as the squares of those values, both
-        integers and binary strings, for convenience
-        """
-        data_bs: bytes = reduce(lambda acc, x: acc +
-                                B.encode_pubkey(x, 'bin'), [L, R, P], b"")
-        xb: bytes = hashlib.sha256(self.fs_state + data_bs).digest()
-
-        self.fs_state = xb
-
-        x: Scalar = B.encode_privkey(xb, 'decimal') % B.N
-        x_sq: Scalar = pow(x, 2, B.N)
-        xinv: Scalar = modinv(x, B.N)
-        x_sq_inv: Scalar = pow(xinv, 2, B.N)
-
-        return (x, x_sq, xinv, x_sq_inv)
-
     def generate_proof(self) -> Tuple[Scalar, Scalar, List[Point], List[Point]]:
         self.fs_state = b''
         self.L = []
@@ -128,7 +107,9 @@ class InnerProductCommitment:
                 aR, bL, G=gL, H=hR, U=self.U).get_commitment()
         )
 
-        (x, x_sq, xinv, x_sq_inv) = self.fiat_shamir(self.L[-1], self.R[-1], P)
+        (self.fs_state, _) = fiat_shamir(
+            self.fs_state, [self.L[-1], self.R[-1], P], nret=0)
+        (x, x_sq, xinv, x_sq_inv) = bytes_to_xes(self.fs_state)
 
         # Construct change of coordinates for base points, and for vector terms
         gprime = []
@@ -204,8 +185,9 @@ class InnerProductCommitment:
 
             return P == p_prime
 
-        (x, x_sq, xinv, x_sq_inv) = self.fiat_shamir(
-            L[self.verify_iter], R[self.verify_iter], P)
+        (self.fs_state, _) = fiat_shamir(self.fs_state, [
+            L[self.verify_iter], R[self.verify_iter], P], nret=0)
+        (x, x_sq, xinv, x_sq_inv) = bytes_to_xes(self.fs_state)
 
         gprime = []
         hprime = []
@@ -224,7 +206,7 @@ class InnerProductCommitment:
                     B.multiply(H[i + int(N / 2)], xinv)
                 )
             )
-        
+
         p_prime1 = B.add_pubkeys(
             P, B.multiply(L[self.verify_iter], x_sq)
         )
